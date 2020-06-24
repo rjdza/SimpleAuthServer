@@ -1,7 +1,10 @@
 import cherrypy
 from cherrypy import Tool
 import os
+
 import database as db
+import admin as saadmin
+import template as tmpl
 
 import authenticate as sa
 import html_functions as hf
