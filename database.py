@@ -43,6 +43,9 @@ def close_connections():
     if connDBUserDetails:
         connDBUserDetails.close()
 
+def connect():
+    create_connection(DBUserDetailsFile)
+
 if __name__ == '__main__':
     # create_connection(r"C:\sqlite\db\pythonsqlite.db")
     create_connection(DBUserDetailsFile)

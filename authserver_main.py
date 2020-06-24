@@ -1,9 +1,12 @@
 import cherrypy
 from cherrypy import Tool
 import os
+import database as db
 
 import authenticate as sa
 import html_functions as hf
+
+db.connect()
 
 PATH = os.path.abspath(os.path.dirname(__file__))
 print("### Path: " + PATH)
