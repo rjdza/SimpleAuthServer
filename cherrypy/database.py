@@ -3,6 +3,11 @@ from sqlite3 import Error
 
 DBUserDetailsFile = r"database/dbu_userdetails.sqlite3"
 connDBUserDetails = ""
+DEBUG=False
+
+def dprint(PrintStr):
+    if DEBUG:
+        print(PrintStr)
 
 def create_connection(db_file):
     """ create a database connection to a SQLite database """
@@ -10,7 +15,7 @@ def create_connection(db_file):
     # conn = None
     try:
         connDBUserDetails = sqlite3.connect(db_file)
-        print(sqlite3.version)
+        dprint("DB>SQLite Version: " + sqlite3.version)
         SQL_Cursor = connDBUserDetails.cursor()
 
         SQL='''CREATE TABLE IF NOT EXISTS UserInfo(
@@ -32,9 +37,9 @@ def create_connection(db_file):
         SQL_Cursor.execute(SQL)
         
     except Error as e:
-        print(e)
+        dprint(e)
     finally:
-        print("Connected to Database File: " + db_file)
+        dprint("DB>Connected to Database File: " + db_file)
         # if connDBUserDetails:
         #     connDBUserDetails.close()
 
@@ -42,6 +47,9 @@ def close_connections():
     global connDBUserDetails
     if connDBUserDetails:
         connDBUserDetails.close()
+
+def close():
+    close_connections()
 
 def connect():
     create_connection(DBUserDetailsFile)
