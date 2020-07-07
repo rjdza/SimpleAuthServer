@@ -1,6 +1,6 @@
 import sqlite3
 from sqlite3 import Error
-import hashlib
+import hashlib, binascii
 import os
 
 DBUserDetailsFile = r"database/dbu_userdetails.sqlite3"
@@ -10,14 +10,20 @@ DEBUG=False
 class clsSecurePassword:
     SaltLength = 32
     SecurityIterations = 100000
+    def MakeSalt(self, SaltLength):
+        salt = os.urandom(SaltLength)
+        return salt
+
     def MakePass(self,myPassword):
-        salt = os.urandom(self.SaltLength)
+        """
+        Create a secure password with embedded salt
+        :param myPassword:
+        :return:
+        """
+        salt = self.MakeSalt(self.SaltLength)
         key = hashlib.pbkdf2_hmac('sha256', myPassword.encode('utf-8'), salt, self.SecurityIterations)
-        # if self.CheckPass(myPassword,salt+key):
-        #     print("Password checks out OK!")
-        # else:
-        #     print("Password NOT OK!")
         return salt + key
+
     def CheckPass(self, myPassword, StoredPassword):
         salt = StoredPassword[:self.SaltLength]
         oldKey = StoredPassword[self.SaltLength:]
@@ -99,46 +105,36 @@ def listUsers(searchQuery, searchExact):
     SQL_Cursor.execute(SQL)
     return SQL_Cursor.fetchall()
 
-def addUser(email, passwd, fname, lname, desc, note, groupid):
+def getUserInfo(UserID):
     global connDBUserDetails
-    global securePassword
+    SQLString = "SELECT * FROM UserInfo where id = " + str(int(UserID))
+    dprint(SQLString)
     SQL_Cursor = connDBUserDetails.cursor()
-    dprint((email, passwd, fname, lname, desc, note, groupid))
+    SQL_Cursor.execute(SQLString)
+    return SQL_Cursor.fetchall()[0]
+
+def addUser(email, passwd, fname, lname, desc, note, groupid):
     passwd = securePassword.MakePass(passwd)
-    try:
-        SQL_Cursor.execute("INSERT INTO UserInfo (email_address, password, first_names, last_name, description, notes, group_id) values(?, ?, ?, ?, ?, ?, ?)", (email, passwd, fname, lname, desc, note, groupid))
-        connDBUserDetails.commit()
-        RET=True
-    except sqlite3.Error as error:
-        RET=False
-        print("Failed to add user.")
-        print(error )
-    SQL_Cursor.close
+    SQLString = "INSERT INTO UserInfo (email_address, password, first_names, last_name, description, notes, group_id) values(?, ?, ?, ?, ?, ?, ?)"
+    SQLVars = (email, passwd, fname, lname, desc, note, groupid)
+    RET = sqlExec(SQLString, SQLVars, "Add User")
     return RET
 
 def delUser(UserID):
-    # global connDBUserDetails
-    # SQL_Cursor = connDBUserDetails.cursor()
-    # SQL = "DELETE FROM UserInfo WHERE id = " + str(UserID)
-    # try:
-    #     RET=True
-    #     SQL_Cursor.execute(SQL)
-    #     connDBUserDetails.commit()
-    # except sqlite3.Error as error:
-    #     RET=False
-    #     print("Failed to delete user.")
-    #     print(error )
-    # return RET
-    SQL = "DELETE FROM UserInfo WHERE id = " + str(UserID)
-    RET=sqlExec(SQL, "Delete User")
+    SQLString = "DELETE FROM UserInfo WHERE id = ?"
+    SQLVars = (str(UserID))
+    RET=sqlExec(SQLString, SQLVars, "Delete User")
     return RET
 
-def sqlExec(SQL, actionDescription):
+def sqlExec(SQLString, SQLVars, actionDescription):
     global connDBUserDetails
     SQL_Cursor = connDBUserDetails.cursor()
+    dprint(actionDescription)
+    dprint(SQLString)
+    dprint(SQLVars)
     try:
         RET=True
-        SQL_Cursor.execute(SQL)
+        SQL_Cursor.execute(SQLString, SQLVars)
         connDBUserDetails.commit()
     except sqlite3.Error as error:
         RET=False

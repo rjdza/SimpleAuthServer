@@ -20,6 +20,8 @@ parserAdd = subparsersMain.add_parser("add", help="Add user")
 parserDel = subparsersMain.add_parser("del", help="Delete user")
 parserMod = subparsersMain.add_parser("mod", help="Modify user")
 parserList = subparsersMain.add_parser("list", help="List users")
+parserPasswd = subparsersMain.add_parser("passwd", help="Change Password for user")
+parserCheckAuth = subparsersMain.add_parser("checkauth", help="Change Password for user")
 # </editor-fold>
 
 # <editor-fold desc="Add User">
@@ -50,6 +52,19 @@ parserMod.add_argument('--desc', help="User description")
 parserMod.add_argument('--note', help="New note / info")
 parserMod.add_argument('--addnote', help="Additional note")
 parserMod.add_argument('--groupid', help="Group membership")
+# </editor-fold>
+
+# <editor-fold desc="Set Password">
+parserSetPassIDGroup=parserPasswd.add_mutually_exclusive_group(required=True)
+parserSetPassIDGroup.add_argument('--email', help="Email address of user to modify")
+parserSetPassIDGroup.add_argument('--uid', help="User ID of user to modify")
+# </editor-fold>
+
+# <editor-fold desc="Check Auth">
+parserCheckAuthIDGroup=parserCheckAuth.add_mutually_exclusive_group(required=True)
+parserCheckAuthIDGroup.add_argument('--email', help="Email address of user to modify")
+parserCheckAuthIDGroup.add_argument('--uid', help="User ID of user to modify")
+parserCheckAuth.add_argument('--passwd', help="Password to test")
 # </editor-fold>
 
 # <editor-fold desc="List Users">
@@ -92,6 +107,92 @@ def delUser():
 def modUser():
     global parserMod
     print("** Modifying User **")
+    USERINFO = False
+    if argsMain.uid:
+        print("Mod by UUID")
+        USERINFO = db.getUserInfo(argsMain.uid)
+    else:
+        ROWS = db.listUsers(argsMain.email, True)
+        if len(ROWS) == 1:
+            USERID = ROWS[0][0]
+            print("Mod by Email Address")
+            USERINFO = db.getUserInfo(USERID)
+        else:
+            print("Too many results.  Choose one and try again:")
+            for USER in ROWS:
+                print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
+
+    if USERINFO:
+        USERID, EMAIL, PASSWD, FNAME, LNAME, DESC, NOTE, GROUPID = USERINFO
+        print("Updating info for user [", EMAIL, "]")
+        EMAIL = argsMain.newemail if argsMain.newemail else EMAIL
+        FNAME = argsMain.fname if argsMain.fname else FNAME
+        LNAME = argsMain.lname if argsMain.lname else LNAME
+        DESC = argsMain.desc if argsMain.desc else DESC
+        NOTE = argsMain.note if argsMain.note else NOTE
+        NOTE = NOTE + "//" + argsMain.addnote if argsMain.addnote else NOTE
+        GROUPID = argsMain.groupid if argsMain.groupid else GROUPID
+        if argsMain.passwd:
+            PASSWD = db.securePassword.MakePass(argsMain.passwd)
+
+        SQLString = """
+        UPDATE UserInfo SET 
+            email_address = ?, 
+            password = ?, 
+            first_names = ?, 
+            last_name = ?, 
+            description = ?, 
+            notes = ?, 
+            group_id = ?
+        WHERE
+            id = ?
+        """
+        SQLVars = (EMAIL, PASSWD, FNAME, LNAME, DESC, NOTE, GROUPID, USERID)
+        db.sqlExec(SQLString, SQLVars, "Update record")
+
+def setPass():
+    USERID = False
+    if argsMain.uid:
+        print("SetPass by UUID")
+        USERID = argsMain.uid
+    else:
+        ROWS = db.listUsers(argsMain.email, True)
+        if len(ROWS) == 1:
+            USERID = ROWS[0][0]
+            print("SetPass by Email Address")
+        else:
+            print("Too many results.  Choose one and try again:")
+            for USER in ROWS:
+                print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
+    if USERID:
+        PASSWD = getMissingValue("", "", "New Password", True)
+        SQLString = """
+        UPDATE UserInfo SET 
+            password = ?
+        WHERE
+            id = ?
+        """
+        SQLVars = (PASSWD, USERID)
+        RET = db.sqlExec(SQLString, SQLVars, "Update record")
+        if RET:
+            print("Password successfully changed")
+
+def CheckAuth(userID, myPasswd):
+    USERID = False
+    if argsMain.uid:
+        print("CheckAuth by UUID")
+        USERID = argsMain.uid
+    else:
+        ROWS = db.listUsers(argsMain.email, True)
+        if len(ROWS) == 1:
+            USERID = ROWS[0][0]
+            print("CheckAuth by Email Address")
+        else:
+            print("Too many results.  Choose one and try again:")
+            for USER in ROWS:
+                print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
+    if USERID:
+        pass
 
 def listUsers():
     '''
@@ -144,10 +245,14 @@ def getMissingValue(switchDesc, switchVal, helpString, isPassword):
     while switchVal == "":
         if isPassword:
             switchVal = getpass.getpass("  " + switchDesc + "    " + helpString + ": ")
+            switchVal2 = getpass.getpass("  " + switchDesc + "    " + helpString + "(confirm): ")
+            if switchVal != switchVal2:
+                switchVal = ""
+                print("Values do not match.")
+
         else:
             switchVal = input("  " + switchDesc + "    " + helpString + ": ")
     return switchVal
-
 
 # </editor-fold>
 
@@ -157,6 +262,7 @@ switcherMain = {
     'del': delUser,
     'mod': modUser,
     'list': listUsers,
+    'passwd': setPass,
 }
 # </editor-fold>
 
