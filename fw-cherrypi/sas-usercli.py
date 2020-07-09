@@ -1,13 +1,15 @@
 #!/usr/bin/python3
-
-import database as db
-import sys
+# import sys
 import getpass
-
 import argparse
 
+import database as db
+
+dbUserManager = db.ClassDBUserManagement()
+securePassword = db.ClassSecurePassword
+
 # <editor-fold desc="Argument Parser">
-argsMain= ""
+# args_main = ""
 
 # <editor-fold desc="Parser Vars">
 # <editor-fold desc="Parser Main">
@@ -77,71 +79,73 @@ parserList.add_argument('-o', '--out', dest="outputstyle", help="Show notes", ch
 # </editor-fold>
 
 # <editor-fold desc="Switcher - Functions">
-def addUser():
+def add_user():
     global parserAdd
     print("** Adding User **")
-    EMAIL = getMissingValue("--email", argsMain.email, "Email address (Used as username)", False)
-    PASSWD = getMissingValue("--passwd", argsMain.passwd, "Password", True)
-    FNAME = getMissingValue("--fname", argsMain.fname, "First name(s)", False)
-    LNAME = getMissingValue("--lname", argsMain.lname, "Last name / Surname", False)
-    DESC = getMissingValue("--desc", argsMain.desc, "Description of user", False)
-    NOTE = getMissingValue("--note", argsMain.note, "User Notes", False)
-    # GROUPID = getMissingValue("--groupid", argsMain.groupid, "Group ID", False)
-    GROUPID = 0
-    RES = db.addUser(EMAIL, PASSWD, FNAME, LNAME, DESC, NOTE, int(GROUPID))
+    email_address = get_missing_value("--email", args_main.email, "Email address (Used as username)", False)
+    password = get_missing_value("--passwd", args_main.passwd, "Password", True)
+    first_name = get_missing_value("--fname", args_main.fname, "First name(s)", False)
+    last_name = get_missing_value("--lname", args_main.lname, "Last name / Surname", False)
+    user_description = get_missing_value("--desc", args_main.desc, "Description of user", False)
+    user_notes = get_missing_value("--note", args_main.note, "User Notes", False)
+    # group_id = get_missing_value("--groupid", args_main.groupid, "Group ID", False)
+    group_id = 0
+    result = dbUserManager.user_add(email_address, password, first_name, last_name, user_description, user_notes, int(group_id))
+    return result
 
-def delUser():
+def delete_user():
     global parserDel
     print("** Deleting User **")
-    if argsMain.uid:
-        db.delUser(argsMain.uid)
+    if args_main.uid:
+        dbUserManager.user_del(args_main.uid)
     else:
-        ROWS = db.listUsers(argsMain.email, True)
-        if len(ROWS) == 1:
-            UUID = ROWS[0][0]
-            print(f"Deleting user [{ROWS[0][1]}]")
-            db.delUser(UUID)
+        query_rows = dbUserManager.users_list(args_main.email, True)
+        if len(query_rows) == 1:
+            user_id = query_rows[0][0]
+            print(f"Deleting user [{query_rows[0][1]}]")
+            dbUserManager.user_del(int(user_id))
         else:
             print("Too many results.  Choose one and try again:")
-            for USER in ROWS:
-                print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
+            for USER in query_rows:
+                print(f"user_id: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
 
 def modUser():
     global parserMod
     print("** Modifying User **")
-    USERINFO = False
-    if argsMain.uid:
+    user_info = False
+    if args_main.uid:
         print("Mod by UUID")
-        USERINFO = db.getUserInfo(argsMain.uid)
+        user_info = dbUserManager.users_get_info(args_main.uid)
+        
     else:
-        ROWS = db.listUsers(argsMain.email, True)
-        print(ROWS)
-        if ROWS:
-            if len(ROWS) == 1:
-                USERID = ROWS[0][0]
+        query_rows = dbUserManager.users_list(args_main.email, True)
+        print(query_rows)
+        if query_rows:
+            if len(query_rows) == 1:
+                user_id = query_rows[0][0]
                 print("Mod by Email Address")
-                USERINFO = db.getUserInfo(USERID)
+                user_info = dbUserManager.users_get_info(user_id)
             else:
                 print("Too many results.  Choose one and try again:")
-                for USER in ROWS:
-                    print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
+                for user in query_rows:
+                    print(f"user_id: {user[0]}, Email: {user[1]}, Name: {user[3]} {user[4]}")
         else:
             print("No results.")
 
-    if USERINFO:
-        USERID, EMAIL, PASSWD, FNAME, LNAME, DESC, NOTE, GROUPID = USERINFO
-        print("Updating info for user [", EMAIL, "]")
-        EMAIL = argsMain.newemail if argsMain.newemail else EMAIL
-        FNAME = argsMain.fname if argsMain.fname else FNAME
-        LNAME = argsMain.lname if argsMain.lname else LNAME
-        DESC = argsMain.desc if argsMain.desc else DESC
-        NOTE = argsMain.note if argsMain.note else NOTE
-        NOTE = NOTE + "//" + argsMain.addnote if argsMain.addnote else NOTE
-        GROUPID = argsMain.groupid if argsMain.groupid else GROUPID
-        if argsMain.passwd:
-            PASSWD = db.securePassword.NewPass(argsMain.passwd)
+    if user_info:
+        user_id, email_address, password, first_name, last_name, description, note, group_id = user_info
+        print("Updating info for user [", email_address, "]")
+        email_address = args_main.newemail if args_main.newemail else email_address
+        first_name = args_main.fname if args_main.fname else first_name
+        last_name = args_main.lname if args_main.lname else last_name
+        description = args_main.desc if args_main.desc else description
+        note = args_main.note if args_main.note else note
+        note = note + "//" + args_main.addnote if args_main.addnote else note
+        group_id = args_main.groupid if args_main.groupid else group_id
+        if args_main.passwd:
+            password = dbUserManager.sec_pwd_tool.make_new_password(args_main.passwd)
 
-        SQLString = """
+        sql_string = """
         UPDATE UserInfo SET 
             email_address = ?, 
             password = ?, 
@@ -153,90 +157,93 @@ def modUser():
         WHERE
             id = ?
         """
-        SQLVars = (EMAIL, PASSWD, FNAME, LNAME, DESC, NOTE, GROUPID, USERID)
-        db.sqlExec(SQLString, SQLVars, "Update record")
+        sql_vars = (email_address, password, first_name, last_name, description, note, group_id, user_id)
+        dbUserManager.dbadmin_exec(sql_string, sql_vars, "Update record")
 
-def setPass():
-    USERID = False
-    if argsMain.uid:
+def change_password():
+    user_id = False
+    if args_main.uid:
         print("SetPass by UUID")
-        USERID = argsMain.uid
+        user_id = args_main.uid
     else:
-        ROWS = db.listUsers(argsMain.email, True)
-        if len(ROWS) == 1:
-            USERID = ROWS[0][0]
+        # query_rows = dbUserManager.users_list(args_main.email, True)
+        query_rows = dbUserManager.users_list(args_main.email, True)
+        if len(query_rows) == 1:
+            user_id = query_rows[0][0]
             print("SetPass by Email Address")
         else:
             print("Too many results.  Choose one and try again:")
-            for USER in ROWS:
-                print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
-    if USERID:
-        PASSWD = getMissingValue("", argsMain.passwd, "New Password", True)
-        STOREDPASSWD = db.securePassword.NewPass(PASSWD)
-        SQLString = """
+            for USER in query_rows:
+                print(f"user_id: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
+    if user_id:
+        password = get_missing_value("", args_main.passwd, "New Password", True)
+        stored_password = dbUserManager.sec_pwd_tool.make_new_password(password)
+        sql_string = """
         UPDATE UserInfo SET 
             password = ?
         WHERE
             id = ?
         """
-        SQLVars = (STOREDPASSWD, USERID)
-        RET = db.sqlExec(SQLString, SQLVars, "Update record")
-        if RET:
+        sql_vars = (stored_password, user_id)
+        return_value = dbUserManager.dbadmin_exec(sql_string, sql_vars=sql_vars, descriptption="Update record")
+        
+        if return_value:
             print("Password successfully changed")
+        else:
+            print("Problem while changing password")
 
-def checkAuth():
+def check_auth():
     print("\nChecking authentication...\n")
-    USERID = False
-    if argsMain.uid:
-        print("CheckAuth by UUID")
-        USERID = argsMain.uid
+    user_id = False
+    if args_main.uid:
+        print("CheckAuth by User ID")
+        user_id = args_main.uid
     else:
-        ROWS = db.listUsers(argsMain.email, True)
-        if len(ROWS) == 1:
-            USERID = ROWS[0][0]
+        # query_rows = dbUserManager.users_list(args_main.email, True)
+        query_rows = dbUserManager.users_list(args_main.email, True)
+        if len(query_rows) == 1:
+            user_id = query_rows[0][0]
             print("CheckAuth by Email Address")
         else:
             print("Too many results.  Choose one and try again:")
-            for USER in ROWS:
-                print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
-    if USERID:
-        # print(argsMain.showdetails)
-        PASSWD = getMissingValue("", argsMain.passwd, "Password", True)
-        SHOWDETAILS = True if argsMain.showdetails > 0 else False
-        SHOWPWDSTRING = True if argsMain.showdetails > 1 else False
-        RET = db.checkAuth(USERID, PASSWD, showdetails=SHOWDETAILS, showpwdstring=SHOWPWDSTRING)
-        if RET:
+            for user in query_rows:
+                print(f"user_id: {user[0]}, Email: {user[1]}, Name: {user[3]} {user[4]}")
+    if user_id:
+        # print(args_main.show_details)
+        passwd = get_missing_value("", args_main.passwd, "Password", True)
+        show_details = True if args_main.showdetails > 0 else False
+        show_pwd_string = True if args_main.showdetails > 1 else False
+        # return_value = db.check_auth(user_id, passwd, showdetails=show_details, showpwdstring=show_pwd_string)
+        return_value = dbUserManager.users_check_auth(user_id, passwd, showdetails=show_details, showpwdstring=show_pwd_string)
+        if return_value:
             print("Authentication successful")
         else:
             print("Authentication failed")
 
-def listUsers():
+def list_users():
     '''
     Get a list of users from the DB, potentially filtered by a query satring.
     :return:
     '''
     global parserList
     print("** Listing Users **")
-    # print(argsMain)
-    ROWS=db.listUsers(argsMain.query, argsMain.exact)
-    # print(ROWS)
-    # print("---")
-    USERID, EMAIL, FNAME, LNAME, DESC, NOTE, GROUPID = "UserID", "Email", "First Name", "Last Name", "Description", "Note", "GroupID"
+    # ROWS=dbUserManager.users_list(args_main.query, args_main.exact)
+    ROWS=dbUserManager.users_list(args_main.query, args_main.exact)
+    USERID, EMAIL, FNAME, LNAME, DESC, NOTE, GROUPID = "user_id", "Email", "First Name", "Last Name", "Description", "Note", "GroupID"
     SEP=" |"
     FIELDSTART=""
     FIELDEND = ""
-    if argsMain.outputstyle == "csv":
+    if args_main.outputstyle == "csv":
         SEP = ","
         FIELDSTART = ""
         FIELDEND = ""
-    elif argsMain.outputstyle == "text":
+    elif args_main.outputstyle == "text":
         SEP = ""
         FIELDSTART = ""
         FIELDEND = ""
 
     print(f"{FIELDSTART}{USERID:<7}{SEP} {EMAIL:<30}{SEP} {FNAME:<10}{SEP} {LNAME:<10}{SEP} {DESC:<10}{SEP} {GROUPID:<7}{FIELDEND}")
     for x in ROWS:
-        # print(x[1])
         USERID=x[0]
         EMAIL=x[1][:31]
         FNAME=x[3][:11]
@@ -245,10 +252,10 @@ def listUsers():
         NOTE = x[6][:71]
         GROUPID = str(x[7])
         print(f"{FIELDSTART}{USERID:<7}{SEP} {EMAIL:<30}{SEP} {FNAME:<10}{SEP} {LNAME:<10}{SEP} {DESC:<10}{SEP} {GROUPID:<7}{FIELDEND}")
-        if argsMain.shownotes:
+        if args_main.shownotes:
             print(f"Notes: {NOTE:<70}")
 
-def getMissingValue(switchDesc, switchVal, helpString, isPassword):
+def get_missing_value(switchDesc, switchVal, helpString, isPassword):
     '''
     Checks is option is set, and prompts for value if it isn't.
     :param switchDesc:
@@ -274,32 +281,21 @@ def getMissingValue(switchDesc, switchVal, helpString, isPassword):
 
 # <editor-fold desc="Switcher - Main">
 switcherMain = {
-    'add': addUser,
-    'del': delUser,
+    'add': add_user,
+    'del': delete_user,
     'mod': modUser,
-    'list': listUsers,
-    'passwd': setPass,
-    'checkauth': checkAuth
+    'list': list_users,
+    'passwd': change_password,
+    'checkauth': check_auth,
+    None: ParserMain.print_help
 }
 # </editor-fold>
 
 
-# txt = input("Type something to test this out: ")
-# print("Is this what you just said? ", txt)
+args_main, argsUnknown = ParserMain.parse_known_args()
+dbUserManager.dbadmin_connect()
 
-argsMain, argsUnknown = ParserMain.parse_known_args()
-db.connect()
+switcher_result = switcherMain.get(args_main.rootaction)
+switcher_result()
 
-# print("##################")
-# print(argsMain.rootaction)
-# print("##################")
-
-# RES = switcherMain.get(argsMain.rootaction, lambda: "Unknown Option")
-# RES = switcherMain.get(argsMain.rootaction, ParserMain.print_help())
-RES = switcherMain.get(argsMain.rootaction)
-RES()
-
-
-# print("##################")
-# print(RES)
-db.close_connections()
+dbUserManager.dbadmin_close()
