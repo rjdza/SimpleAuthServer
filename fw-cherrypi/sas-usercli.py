@@ -58,6 +58,7 @@ parserMod.add_argument('--groupid', help="Group membership")
 parserSetPassIDGroup=parserPasswd.add_mutually_exclusive_group(required=True)
 parserSetPassIDGroup.add_argument('--email', help="Email address of user to modify")
 parserSetPassIDGroup.add_argument('--uid', help="User ID of user to modify")
+parserPasswd.add_argument('--passwd', help="New Password")
 # </editor-fold>
 
 # <editor-fold desc="Check Auth">
@@ -65,6 +66,7 @@ parserCheckAuthIDGroup=parserCheckAuth.add_mutually_exclusive_group(required=Tru
 parserCheckAuthIDGroup.add_argument('--email', help="Email address of user to modify")
 parserCheckAuthIDGroup.add_argument('--uid', help="User ID of user to modify")
 parserCheckAuth.add_argument('--passwd', help="Password to test")
+parserCheckAuth.add_argument('-d', '--showdetails', action='count', default=0, help="Show password data. Use multiple times to show more data.")
 # </editor-fold>
 
 # <editor-fold desc="List Users">
@@ -113,14 +115,18 @@ def modUser():
         USERINFO = db.getUserInfo(argsMain.uid)
     else:
         ROWS = db.listUsers(argsMain.email, True)
-        if len(ROWS) == 1:
-            USERID = ROWS[0][0]
-            print("Mod by Email Address")
-            USERINFO = db.getUserInfo(USERID)
+        print(ROWS)
+        if ROWS:
+            if len(ROWS) == 1:
+                USERID = ROWS[0][0]
+                print("Mod by Email Address")
+                USERINFO = db.getUserInfo(USERID)
+            else:
+                print("Too many results.  Choose one and try again:")
+                for USER in ROWS:
+                    print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
         else:
-            print("Too many results.  Choose one and try again:")
-            for USER in ROWS:
-                print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
+            print("No results.")
 
     if USERINFO:
         USERID, EMAIL, PASSWD, FNAME, LNAME, DESC, NOTE, GROUPID = USERINFO
@@ -133,7 +139,7 @@ def modUser():
         NOTE = NOTE + "//" + argsMain.addnote if argsMain.addnote else NOTE
         GROUPID = argsMain.groupid if argsMain.groupid else GROUPID
         if argsMain.passwd:
-            PASSWD = db.securePassword.MakePass(argsMain.passwd)
+            PASSWD = db.securePassword.NewPass(argsMain.passwd)
 
         SQLString = """
         UPDATE UserInfo SET 
@@ -165,19 +171,21 @@ def setPass():
             for USER in ROWS:
                 print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
     if USERID:
-        PASSWD = getMissingValue("", "", "New Password", True)
+        PASSWD = getMissingValue("", argsMain.passwd, "New Password", True)
+        STOREDPASSWD = db.securePassword.NewPass(PASSWD)
         SQLString = """
         UPDATE UserInfo SET 
             password = ?
         WHERE
             id = ?
         """
-        SQLVars = (PASSWD, USERID)
+        SQLVars = (STOREDPASSWD, USERID)
         RET = db.sqlExec(SQLString, SQLVars, "Update record")
         if RET:
             print("Password successfully changed")
 
-def CheckAuth(userID, myPasswd):
+def checkAuth():
+    print("\nChecking authentication...\n")
     USERID = False
     if argsMain.uid:
         print("CheckAuth by UUID")
@@ -192,7 +200,15 @@ def CheckAuth(userID, myPasswd):
             for USER in ROWS:
                 print(f"UserID: {USER[0]}, Email: {USER[1]}, Name: {USER[3]} {USER[4]}")
     if USERID:
-        pass
+        # print(argsMain.showdetails)
+        PASSWD = getMissingValue("", argsMain.passwd, "Password", True)
+        SHOWDETAILS = True if argsMain.showdetails > 0 else False
+        SHOWPWDSTRING = True if argsMain.showdetails > 1 else False
+        RET = db.checkAuth(USERID, PASSWD, showdetails=SHOWDETAILS, showpwdstring=SHOWPWDSTRING)
+        if RET:
+            print("Authentication successful")
+        else:
+            print("Authentication failed")
 
 def listUsers():
     '''
@@ -263,6 +279,7 @@ switcherMain = {
     'mod': modUser,
     'list': listUsers,
     'passwd': setPass,
+    'checkauth': checkAuth
 }
 # </editor-fold>
 

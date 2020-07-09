@@ -8,31 +8,93 @@ connDBUserDetails = ""
 DEBUG=False
 
 class clsSecurePassword:
+    """
+    Password management Class.
+
+    NOTE: Changing vars. If you change these variables, previously stored passwords will no longer work.
+    :var SaltLength: INT - System default length for salt.
+    :var SecurityIterations: INT - Number of hash iterations used to make brute forcing take longer.
+    """
     SaltLength = 32
     SecurityIterations = 100000
-    def MakeSalt(self, SaltLength):
-        salt = os.urandom(SaltLength)
-        return salt
 
-    def MakePass(self,myPassword):
+    def MakeSalt(self, SaltLength):
         """
-        Create a secure password with embedded salt
-        :param myPassword:
-        :return:
+        Create a string to be used to salt the password. DOES NOT use the built-in SaltLength var!
+
+        :param SaltLength: INT - The length of the salt to create.
+        :return: Returns a string.
+        """
+        salt = os.urandom(SaltLength)
+        RET=binascii.b2a_hex(salt).decode("utf-8")
+        return RET
+
+    def NewPass(self,myPassword):
+        """
+        Create a NEW secure password hash with embedded salt
+        :param myPassword: STR - The password to use for the hash.
+        :return: STR - Retrurns a string that contains both the salt and the key, in that order.
         """
         salt = self.MakeSalt(self.SaltLength)
-        key = hashlib.pbkdf2_hmac('sha256', myPassword.encode('utf-8'), salt, self.SecurityIterations)
+        PASSWDSTRING = self.MakePass(salt, myPassword)
+        return PASSWDSTRING
+
+    def MakePass(self, salt, myPassword):
+        """
+        Create a secure password with embedded salt.
+        :param myPassword: STR - The plain text password to use for the hash.
+        :param salt: STR - Salt used to ensure password uniqueness.
+        :return:
+        """
+        salt_bin = binascii.a2b_hex(salt)
+        key_bin = hashlib.pbkdf2_hmac('sha256', myPassword.encode('utf-8'), salt_bin, self.SecurityIterations)
+        key = binascii.b2a_hex(key_bin).decode("utf-8")
         return salt + key
 
-    def CheckPass(self, myPassword, StoredPassword):
-        salt = StoredPassword[:self.SaltLength]
-        oldKey = StoredPassword[self.SaltLength:]
-        newKey = hashlib.pbkdf2_hmac('sha256', myPassword.encode('utf-8'), salt, self.SecurityIterations)
+    def CheckPass(self, myPassword, StoredPassword, *args, **kwargs):
+        """
+        Compares the plain text password provided with the hashed hex password stored in the database.
+        :param myPassword: STR - Plain text password
+        :param StoredPassword: STR Salt + Password string
+        :param args:
+        :param kwargs: showdetails - BOOL - Display some internal vars
+        :param kwargs: showpwdstring - BOOL - Display the entire stored password string
+        :return: BOOL - Returns True is passwords match, False if they do not.
+        """
+        # print(kwargs)
+        SHOWDETAILS = kwargs.get("showdetails", False)
+        SHOWPWDSTRING = kwargs.get("showpwdstring", False)
+        salt   =StoredPassword[:(self.SaltLength * 2)]
+        oldKey = StoredPassword[(self.SaltLength * 2):]
+        salt_bin = binascii.a2b_hex(salt)
+        newKey = binascii.b2a_hex(hashlib.pbkdf2_hmac('sha256', myPassword.encode('utf-8'), salt_bin, self.SecurityIterations)).decode("utf-8")
+        PWDMATCH = "Passwords MATCH" if oldKey == newKey else "Passwords DO NOT MATCH"
+
+        if self.SaltLength == (len(salt)/2):
+            LENCHK = "Salt matches system length of " + str(self.SaltLength)
+        else:
+            LENCHK = "Salt does NOT match system length.  System = " + str(self.SaltLength) + " while stored is " + str((len(salt)/2))
+
+        if SHOWPWDSTRING:
+            print("")
+            print("-----START OF STORED PASSWORD STRING-----")
+            print(StoredPassword)
+            print("-----END OF STORED PASSWORD STRING-----")
+
+        if SHOWDETAILS:
+            print("")
+            print("  PWD check str: " + myPassword)
+            print(" PWD check hash: " + newKey)
+            print("Stored PWD hash: " + oldKey)
+            print("PWD comparisson: " + PWDMATCH)
+            print("           Salt: " + salt)
+            print("    Salt Length: " + LENCHK)
+            print("")
+
         RET=True if oldKey == newKey else False
         return RET
 
 securePassword = clsSecurePassword()
-
 
 def dprint(PrintStr):
     if DEBUG:
@@ -108,13 +170,15 @@ def listUsers(searchQuery, searchExact):
 def getUserInfo(UserID):
     global connDBUserDetails
     SQLString = "SELECT * FROM UserInfo where id = " + str(int(UserID))
-    dprint(SQLString)
+    # print(SQLString)
     SQL_Cursor = connDBUserDetails.cursor()
     SQL_Cursor.execute(SQLString)
-    return SQL_Cursor.fetchall()[0]
+    RET = SQL_Cursor.fetchall()
+    RET = False if len(RET) != 1 else RET[0]
+    return RET
 
 def addUser(email, passwd, fname, lname, desc, note, groupid):
-    passwd = securePassword.MakePass(passwd)
+    passwd = securePassword.NewPass(passwd)
     SQLString = "INSERT INTO UserInfo (email_address, password, first_names, last_name, description, notes, group_id) values(?, ?, ?, ?, ?, ?, ?)"
     SQLVars = (email, passwd, fname, lname, desc, note, groupid)
     RET = sqlExec(SQLString, SQLVars, "Add User")
@@ -142,6 +206,18 @@ def sqlExec(SQLString, SQLVars, actionDescription):
         print(error )
     return RET
 
+def checkAuth(UserID, myPasswd, *args, **kwargs):
+    SHOWDETAILS = kwargs.get("showdetails", False)
+    SHOWPWDSTRING = kwargs.get("showpwdstring", False)
+    # print(kwargs)
+    USERINFO = getUserInfo(UserID)
+    # print(USERINFO)
+    if USERINFO:
+        storedPasswd = USERINFO[2]
+        RET = securePassword.CheckPass(myPasswd, storedPasswd, showdetails=SHOWDETAILS, showpwdstring=SHOWPWDSTRING)
+    else:
+        RET=False
+    return RET
 
 if __name__ == '__main__':
     # create_connection(r"C:\sqlite\db\pythonsqlite.db")
