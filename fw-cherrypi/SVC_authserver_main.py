@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import cherrypy
 # from cherrypy import Tool
 import os
@@ -9,7 +10,9 @@ import template as tmpl
 import authenticate as sa
 import html_functions as hf
 
-db.connect()
+# db.connect()
+db_usermanager = db.ClassDBUserManagement()
+db_usermanager.dbadmin_connect()
 
 PATH = os.path.abspath(os.path.dirname(__file__))
 print("### Path: " + PATH)
